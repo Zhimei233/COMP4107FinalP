@@ -1,8 +1,8 @@
 """
 model.py
 Two models:
-  1. BiGRUBaseline  — BiGRU + mean pooling + classifier
-  2. BiGRUAttention — BiGRU + additive attention + classifier  (proposed model)
+  1. BiGRUBaseline  — BiGRU + mean/max pooling + classifier
+  2. BiGRUAttention — BiGRU + additive attention + classifier
 """
 
 import torch
@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# ── 1. Baseline: BiGRU + Mean Pooling ─────────────────────────────────────────
+# ── 1. Baseline: BiGRU + Mean/Max Pooling ────────────────────────────────────
 class BiGRUBaseline(nn.Module):
     def __init__(
         self,
@@ -33,9 +33,12 @@ class BiGRUBaseline(nn.Module):
             dropout=dropout if num_layers > 1 else 0.0,
         )
         self.dropout = nn.Dropout(dropout)
-        # bidirectional → hidden_size * 2
+
+        feat_dim = hidden_size * 2
+        pooled_dim = feat_dim * 2  # mean + max
+
         self.classifier = nn.Sequential(
-            nn.Linear(hidden_size * 2, hidden_size),
+            nn.Linear(pooled_dim, hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(hidden_size, num_classes),
@@ -46,11 +49,14 @@ class BiGRUBaseline(nn.Module):
         x : (batch, seq_len)
         Returns logits : (batch, num_classes)
         """
-        emb = self.dropout(self.embedding(x))          # (B, L, E)
-        out, _ = self.bigru(emb)                        # (B, L, 2H)
-        # mean pooling over sequence dimension
-        pooled = out.mean(dim=1)                        # (B, 2H)
-        logits = self.classifier(self.dropout(pooled))  # (B, C)
+        emb = self.dropout(self.embedding(x))       # (B, L, E)
+        out, _ = self.bigru(emb)                    # (B, L, 2H)
+
+        mean_pool = out.mean(dim=1)                 # (B, 2H)
+        max_pool, _ = out.max(dim=1)                # (B, 2H)
+        pooled = torch.cat([mean_pool, max_pool], dim=1)   # (B, 4H)
+
+        logits = self.classifier(self.dropout(pooled))
         return logits
 
 
@@ -78,7 +84,6 @@ class BiGRUAttention(nn.Module):
         )
         self.dropout = nn.Dropout(dropout)
 
-        # Additive attention: a single-layer MLP that scores each hidden state
         feat_dim = hidden_size * 2
         self.attn_w = nn.Linear(feat_dim, feat_dim, bias=True)
         self.attn_v = nn.Linear(feat_dim, 1, bias=False)
@@ -90,14 +95,13 @@ class BiGRUAttention(nn.Module):
             nn.Linear(hidden_size, num_classes),
         )
 
-    # ── attention helper ──────────────────────────────────────────────────────
     def _attend(self, hidden, pad_mask=None):
         """
         hidden    : (B, L, 2H)
         pad_mask  : (B, L) — True where position is a PAD token
         Returns
           context : (B, 2H)
-          weights : (B, L)   — attention distribution (for visualisation)
+          weights : (B, L)
         """
         energy = self.attn_v(torch.tanh(self.attn_w(hidden))).squeeze(-1)  # (B, L)
         if pad_mask is not None:
@@ -106,20 +110,19 @@ class BiGRUAttention(nn.Module):
         context = (weights.unsqueeze(-1) * hidden).sum(dim=1)              # (B, 2H)
         return context, weights
 
-    # ── forward ───────────────────────────────────────────────────────────────
     def forward(self, x, return_attention=False):
         """
         x                : (B, L)
-        return_attention : if True, also return attention weight tensor
+        return_attention : if True, also return attention weights
         Returns
           logits          : (B, C)
           weights (opt.)  : (B, L)
         """
-        pad_mask = (x == 0)                                  # (B, L)
-        emb = self.dropout(self.embedding(x))                # (B, L, E)
-        hidden, _ = self.bigru(emb)                          # (B, L, 2H)
-        context, weights = self._attend(hidden, pad_mask)    # (B,2H), (B,L)
-        logits = self.classifier(self.dropout(context))      # (B, C)
+        pad_mask = (x == 0)                               # (B, L)
+        emb = self.dropout(self.embedding(x))             # (B, L, E)
+        hidden, _ = self.bigru(emb)                       # (B, L, 2H)
+        context, weights = self._attend(hidden, pad_mask) # (B, 2H), (B, L)
+        logits = self.classifier(self.dropout(context))   # (B, C)
 
         if return_attention:
             return logits, weights
