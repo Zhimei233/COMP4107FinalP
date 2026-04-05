@@ -1,0 +1,19 @@
+# 虚拟环境
+venv/
+
+# 模型权重（很大）
+outputs/*.pt
+outputs/*.npy
+
+# 数据集（很大）
+data/processed/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+src/__pycache__/
+
+# 系统文件
+.DS_Store
+Thumbs.db
