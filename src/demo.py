@@ -19,35 +19,35 @@ sys.path.insert(0, os.path.dirname(__file__))
 from predict import load_predictor, predict_one
 from utils import plot_attention_heatmap
 
-# ANSI colors
-RESET = "\033[0m"
-BOLD = "\033[1m"
-RED = "\033[91m"
-YELLOW = "\033[93m"
-CYAN = "\033[96m"
-GREEN = "\033[92m"
-DIM = "\033[2m"
+RESET = "\033[0m"; BOLD = "\033[1m"; RED = "\033[91m"
+YELLOW = "\033[93m"; CYAN = "\033[96m"; GREEN = "\033[92m"; DIM = "\033[2m"
+
+
+def _conf_tier_label(conf: float) -> str:
+    if conf >= 0.80:
+        return f"{RED}High confidence{RESET}"
+    if conf >= 0.50:
+        return f"{YELLOW}Moderate confidence{RESET}"
+    return f"{DIM}Low confidence{RESET}"
 
 
 def _colour_word(word, weight):
-    if weight > 0.15:
-        return f"{RED}{BOLD}{word}{RESET}"
-    if weight > 0.07:
-        return f"{YELLOW}{word}{RESET}"
-    if weight > 0.03:
-        return f"{CYAN}{word}{RESET}"
+    if weight > 0.15: return f"{RED}{BOLD}{word}{RESET}"
+    if weight > 0.07: return f"{YELLOW}{word}{RESET}"
+    if weight > 0.03: return f"{CYAN}{word}{RESET}"
     return f"{DIM}{word}{RESET}"
 
 
 def display_result(result: dict, save_attn: bool = False, outputs_dir: str = "outputs"):
     top_emotion = result["predicted_emotion"]
-    top_conf = result["confidence"]
-    tokens = result["tokens"]
-    attn = result["attention"]
+    top_conf    = result["confidence"]
+    tokens      = result["tokens"]
+    attn        = result["attention"]
 
     print()
     print("─" * 66)
-    print(f"  {BOLD}Predicted Emotion:{RESET}  {GREEN}{top_emotion.upper()}{RESET}  ({top_conf*100:.1f}%)")
+    print(f"  {BOLD}Predicted Emotion:{RESET}  {GREEN}{top_emotion.upper()}{RESET}  "
+          f"({top_conf*100:.1f}%)  [{_conf_tier_label(top_conf)}]")
 
     print(f"\n  {BOLD}Top-3 Confidence:{RESET}")
     for rank, (emotion, conf) in enumerate(result["top3"], 1):
@@ -56,19 +56,16 @@ def display_result(result: dict, save_attn: bool = False, outputs_dir: str = "ou
 
     if attn is not None and tokens:
         print(f"\n  {BOLD}Attention Highlights:{RESET}")
-        print("  " + " ".join(_colour_word(token, weight) for token, weight in zip(tokens, attn)))
-
+        print("  " + " ".join(_colour_word(t, w) for t, w in zip(tokens, attn)))
         if result["keywords"]:
             print("  Key words: " + ",  ".join(
                 f"{RED}{item['word']}{RESET}({item['score']:.3f})"
                 for item in result["keywords"]
             ))
-
         if save_attn:
             os.makedirs(outputs_dir, exist_ok=True)
             plot_attention_heatmap(
-                tokens,
-                attn,
+                tokens, attn,
                 title=f"Attention — predicted: {top_emotion}",
                 save_path=os.path.join(outputs_dir, "last_attention.png"),
             )
@@ -83,8 +80,7 @@ def run_demo(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model, vocab, _ = load_predictor(args.model, device, args.outputs_dir)
 
-    model_title = "BiGRU + Mean/Max Pooling" if args.model == "baseline" else "BiGRU + Attention"
-
+    model_title = "BiGRU + Masked Mean/Max Pooling" if args.model == "baseline" else "BiGRU + Attention"
     print(f"\n{BOLD}{'='*66}")
     print(f"  Emotion Classifier Demo  |  {model_title}")
     print(f"  Model: {args.model}  |  Device: {device.type}  |  Vocab: {len(vocab):,}")
@@ -95,31 +91,25 @@ def run_demo(args):
         try:
             user_input = input(f"{BOLD}You > {RESET}").strip()
         except (KeyboardInterrupt, EOFError):
-            print("\nBye!")
-            break
+            print("\nBye!"); break
 
         if user_input.lower() in {"quit", "exit", "q"}:
-            print("Bye!")
-            break
-
+            print("Bye!"); break
         if not user_input:
             continue
 
         result = predict_one(user_input, model, vocab, args.max_len, device)
-
         if result is None:
             print("  Input became empty after cleaning. Please try again.")
             continue
-
         display_result(result, save_attn=args.save_attn, outputs_dir=args.outputs_dir)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="attention", choices=["baseline", "attention"])
-    parser.add_argument("--max_len", type=int, default=256)
-    parser.add_argument("--outputs_dir", type=str, default="outputs")
-    parser.add_argument("--save_attn", action="store_true", help="Save attention heatmap for each input")
+    parser.add_argument("--model",       type=str,  default="attention", choices=["baseline", "attention"])
+    parser.add_argument("--max_len",     type=int,  default=64)   # 与训练一致 (问题1)
+    parser.add_argument("--outputs_dir", type=str,  default="outputs")
+    parser.add_argument("--save_attn",   action="store_true")
     args = parser.parse_args()
-
     run_demo(args)

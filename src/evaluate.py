@@ -5,7 +5,7 @@ Load a saved checkpoint, evaluate on test set, plot confusion matrix.
 Usage
 -----
 python src/evaluate.py --model attention
-python src/evaluate.py --compare          # compare both models
+python src/evaluate.py --compare
 """
 
 import argparse
@@ -44,7 +44,8 @@ def run_eval(model_name, data_path, max_len, batch, outputs_dir):
     splits, vocab = load_and_preprocess(data_path=data_path, max_len=max_len)
     loaders = build_dataloaders(splits, batch_size=batch)
 
-    ckpt = torch.load(ckpt_path, map_location=device)
+    # weights_only=False for legacy checkpoint compatibility (问题4)
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     saved_args = ckpt["args"]
     model = build_model(
         model_type=saved_args["model"], vocab_size=len(vocab),
@@ -68,12 +69,12 @@ def run_eval(model_name, data_path, max_len, batch, outputs_dir):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--model",        type=str, default="attention", choices=["baseline", "attention"])
-    p.add_argument("--compare",      action="store_true")
-    p.add_argument("--data",         type=str, default="data/emotions.csv")
-    p.add_argument("--max_len",      type=int, default=64)
-    p.add_argument("--batch",        type=int, default=64)
-    p.add_argument("--outputs_dir",  type=str, default="outputs")
+    p.add_argument("--model",       type=str, default="attention", choices=["baseline", "attention"])
+    p.add_argument("--compare",     action="store_true")
+    p.add_argument("--data",        type=str, default="data/emotions.csv")
+    p.add_argument("--max_len",     type=int, default=64)
+    p.add_argument("--batch",       type=int, default=64)
+    p.add_argument("--outputs_dir", type=str, default="outputs")
     args = p.parse_args()
 
     os.makedirs(args.outputs_dir, exist_ok=True)

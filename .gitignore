@@ -1,19 +1,19 @@
-# 虚拟环境
+# virtual environment
 venv/
 
-# 模型权重（很大）
+# model checkpoints and outputs
 outputs/*.pt
 outputs/*.npy
 
-# 数据集（很大）
+# processed datasets (large)
 data/processed/
 
-# Python 缓存
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 src/__pycache__/
 
-# 系统文件
+# IDE and OS files
 .DS_Store
 Thumbs.db

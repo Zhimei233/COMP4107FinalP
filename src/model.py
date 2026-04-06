@@ -1,7 +1,7 @@
 """
 model.py
 Two models:
-  1. BiGRUBaseline  — BiGRU + mean/max pooling + classifier
+  1. BiGRUBaseline  — BiGRU + masked mean/max pooling + classifier
   2. BiGRUAttention — BiGRU + additive attention + classifier
 """
 
@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# ── 1. Baseline: BiGRU + Mean/Max Pooling ────────────────────────────────────
+# ── 1. Baseline: BiGRU + Masked Mean/Max Pooling ─────────────────────────────
 class BiGRUBaseline(nn.Module):
     def __init__(
         self,
@@ -23,6 +23,7 @@ class BiGRUBaseline(nn.Module):
         pad_idx: int = 0,
     ):
         super().__init__()
+        self.pad_idx = pad_idx
         self.embedding = nn.Embedding(vocab_size, embed_dim, padding_idx=pad_idx)
         self.bigru = nn.GRU(
             embed_dim,
@@ -49,13 +50,22 @@ class BiGRUBaseline(nn.Module):
         x : (batch, seq_len)
         Returns logits : (batch, num_classes)
         """
-        emb = self.dropout(self.embedding(x))       # (B, L, E)
-        out, _ = self.bigru(emb)                    # (B, L, 2H)
+        pad_mask = (x == self.pad_idx)              # (B, L)  True = PAD
 
-        mean_pool = out.mean(dim=1)                 # (B, 2H)
-        max_pool, _ = out.max(dim=1)                # (B, 2H)
-        pooled = torch.cat([mean_pool, max_pool], dim=1)   # (B, 4H)
+        emb = self.dropout(self.embedding(x))        # (B, L, E)
+        out, _ = self.bigru(emb)                     # (B, L, 2H)
 
+        # ── Masked mean pooling: exclude PAD positions ──
+        mask_expanded = (~pad_mask).unsqueeze(-1).float()   # (B, L, 1)
+        sum_out = (out * mask_expanded).sum(dim=1)           # (B, 2H)
+        lengths = mask_expanded.sum(dim=1).clamp(min=1)      # (B, 1)
+        mean_pool = sum_out / lengths                        # (B, 2H)
+
+        # ── Masked max pooling: set PAD positions to -inf ──
+        out_masked = out.masked_fill(pad_mask.unsqueeze(-1), float("-inf"))
+        max_pool, _ = out_masked.max(dim=1)                  # (B, 2H)
+
+        pooled = torch.cat([mean_pool, max_pool], dim=1)     # (B, 4H)
         logits = self.classifier(self.dropout(pooled))
         return logits
 
@@ -111,18 +121,11 @@ class BiGRUAttention(nn.Module):
         return context, weights
 
     def forward(self, x, return_attention=False):
-        """
-        x                : (B, L)
-        return_attention : if True, also return attention weights
-        Returns
-          logits          : (B, C)
-          weights (opt.)  : (B, L)
-        """
-        pad_mask = (x == 0)                               # (B, L)
-        emb = self.dropout(self.embedding(x))             # (B, L, E)
-        hidden, _ = self.bigru(emb)                       # (B, L, 2H)
-        context, weights = self._attend(hidden, pad_mask) # (B, 2H), (B, L)
-        logits = self.classifier(self.dropout(context))   # (B, C)
+        pad_mask = (x == 0)
+        emb = self.dropout(self.embedding(x))
+        hidden, _ = self.bigru(emb)
+        context, weights = self._attend(hidden, pad_mask)
+        logits = self.classifier(self.dropout(context))
 
         if return_attention:
             return logits, weights
@@ -131,9 +134,6 @@ class BiGRUAttention(nn.Module):
 
 # ── Convenience factory ───────────────────────────────────────────────────────
 def build_model(model_type: str, vocab_size: int, **kwargs) -> nn.Module:
-    """
-    model_type : 'baseline' or 'attention'
-    """
     if model_type == "baseline":
         return BiGRUBaseline(vocab_size=vocab_size, **kwargs)
     elif model_type == "attention":

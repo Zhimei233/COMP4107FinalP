@@ -15,38 +15,10 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from preprocess import clean_text, Vocabulary, pad_sequence, LABEL2EMOTION, NUM_CLASSES
+from preprocess import (clean_text, Vocabulary, pad_sequence,
+                        LABEL2EMOTION, NUM_CLASSES, DISPLAY_STOPWORDS, get_guidance)
 from model import build_model
 from utils import load_checkpoint
-
-
-# Structured guidance templates
-EMOTION2GUIDANCE = {
-    "sadness": {
-        "category": "Seek support",
-        "text": "Allow yourself time to process your feelings and consider reaching out to someone you trust for support."
-    },
-    "joy": {
-        "category": "Reinforce healthy communication",
-        "text": "This is a positive signal. Keep building the relationship through open, respectful, and consistent communication."
-    },
-    "love": {
-        "category": "Express appreciation",
-        "text": "Express your appreciation clearly and continue strengthening trust through honest communication."
-    },
-    "anger": {
-        "category": "Set boundaries",
-        "text": "Pause before reacting and communicate your feelings calmly while setting clear and respectful boundaries."
-    },
-    "fear": {
-        "category": "Clarify expectations",
-        "text": "Identify what is worrying you and try to clarify expectations through a calm conversation."
-    },
-    "surprise": {
-        "category": "Seek clarification",
-        "text": "Give yourself time to process the situation, then ask questions before making assumptions."
-    },
-}
 
 
 def load_predictor(model_name: str, device, outputs_dir: str = "outputs"):
@@ -59,7 +31,7 @@ def load_predictor(model_name: str, device, outputs_dir: str = "outputs"):
         sys.exit(f"[Error] No vocab found at {vocab_path}. Please run training first.")
 
     vocab = Vocabulary.load(vocab_path)
-    ckpt = torch.load(ckpt_path, map_location=device)
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     saved_args = ckpt["args"]
 
     model = build_model(
@@ -74,14 +46,12 @@ def load_predictor(model_name: str, device, outputs_dir: str = "outputs"):
 
     model, _ = load_checkpoint(ckpt_path, model, device)
     model.eval()
-
     return model, vocab, saved_args
 
 
 def predict_one(text: str, model, vocab: Vocabulary, max_len: int, device) -> dict | None:
     clean = clean_text(text)
     tokens = clean.split()
-
     if not tokens:
         return None
 
@@ -103,36 +73,39 @@ def predict_one(text: str, model, vocab: Vocabulary, max_len: int, device) -> di
     top3_idx = probs.argsort()[::-1][:3]
     top3 = [(LABEL2EMOTION[i], float(probs[i])) for i in top3_idx]
     top_emotion = top3[0][0]
+    top_conf = top3[0][1]
 
-    guidance_info = EMOTION2GUIDANCE.get(
-        top_emotion,
-        {
-            "category": "General support",
-            "text": "Take a moment to reflect and respond with care."
-        }
-    )
-
+    # ── Keywords: filter stopwords + threshold near-zero weights ─────────────
     keywords = []
     if attn is not None:
-        top_idx = np.argsort(attn)[::-1][:3]
-        keywords = [
+        filtered = [
             {"word": tokens[i], "score": float(attn[i])}
-            for i in top_idx
-            if i < len(tokens)
+            for i in range(len(tokens))
+            if tokens[i] not in DISPLAY_STOPWORDS and float(attn[i]) > 0.01
         ]
+        if not filtered:
+            filtered = [
+                {"word": tokens[i], "score": float(attn[i])}
+                for i in range(len(tokens))
+                if float(attn[i]) > 0.01
+            ]
+        keywords = sorted(filtered, key=lambda x: x["score"], reverse=True)[:3]
+
+    # ── Guidance: relationship-aware, confidence-tiered, MD5-stable ───────────
+    guidance_info = get_guidance(top_emotion, top_conf, clean, top3)
 
     return {
-        "text": text,
-        "clean_text": clean,
-        "tokens": tokens,
-        "probs": probs,
-        "top3": top3,
-        "predicted_emotion": top_emotion,
-        "confidence": top3[0][1],
-        "attention": attn,
-        "keywords": keywords,
-        "guidance_category": guidance_info["category"],
-        "guidance": guidance_info["text"],
+        "text":               text,
+        "clean_text":         clean,
+        "tokens":             tokens,
+        "probs":              probs,
+        "top3":               top3,
+        "predicted_emotion":  top_emotion,
+        "confidence":         top_conf,
+        "attention":          attn,
+        "keywords":           keywords,
+        "guidance_category":  guidance_info["category"],
+        "guidance":           guidance_info["text"],
     }
 
 
@@ -150,20 +123,18 @@ def _print_result(result: dict):
     print(f"\nText      : {result['text']}")
     print(f"Emotion   : {result['predicted_emotion'].upper()} ({result['confidence']*100:.1f}%)")
     print("Top-3     : " + " | ".join(f"{emo} {conf*100:.1f}%" for emo, conf in result["top3"]))
-
     if result["keywords"]:
         print("Keywords  : " + ", ".join(f"{item['word']}({item['score']:.3f})" for item in result["keywords"]))
-
     print(f"Category  : {result['guidance_category']}")
     print(f"Guidance  : {result['guidance']}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="attention", choices=["baseline", "attention"])
-    parser.add_argument("--text", type=str, default=None)
-    parser.add_argument("--file", type=str, default=None)
-    parser.add_argument("--max_len", type=int, default=64)
+    parser.add_argument("--model",       type=str, default="attention", choices=["baseline", "attention"])
+    parser.add_argument("--text",        type=str, default=None)
+    parser.add_argument("--file",        type=str, default=None)
+    parser.add_argument("--max_len",     type=int, default=64)
     parser.add_argument("--outputs_dir", type=str, default="outputs")
     args = parser.parse_args()
 
@@ -179,8 +150,7 @@ if __name__ == "__main__":
     elif args.file:
         with open(args.file, "r", encoding="utf-8") as f:
             texts = f.readlines()
-        results = predict_batch(texts, model, vocab, args.max_len, device)
-        for result in results:
+        for result in predict_batch(texts, model, vocab, args.max_len, device):
             _print_result(result)
     else:
         parser.print_help()

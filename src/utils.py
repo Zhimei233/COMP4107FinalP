@@ -37,7 +37,8 @@ def save_checkpoint(model, args: dict, val_f1: float, val_acc: float, epoch: int
 
 
 def load_checkpoint(path: str, model, device):
-    ckpt = torch.load(path, map_location=device)
+    # weights_only=False required for loading legacy checkpoints with pickle
+    ckpt = torch.load(path, map_location=device, weights_only=False)
     model.load_state_dict(ckpt["model_state"])
     return model, ckpt
 
@@ -80,14 +81,13 @@ def plot_confusion_matrix(labels, preds, label_names: list, title: str, save_pat
 
 
 def plot_training_curves(histories: dict, save_path: str = None):
-    """histories: {model_name: {'val_loss': [...], 'val_f1': [...]}}"""
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
     for name, h in histories.items():
         epochs = range(1, len(h["val_f1"]) + 1)
         axes[0].plot(epochs, h["val_loss"], label=name)
         axes[1].plot(epochs, h["val_f1"],   label=name)
 
-    axes[0].set(title="Validation Loss",    xlabel="Epoch", ylabel="Loss")
+    axes[0].set(title="Validation Loss",     xlabel="Epoch", ylabel="Loss")
     axes[1].set(title="Validation Macro-F1", xlabel="Epoch", ylabel="Macro-F1")
     for ax in axes:
         ax.legend()
@@ -96,10 +96,9 @@ def plot_training_curves(histories: dict, save_path: str = None):
 
 
 def plot_attention_heatmap(tokens: list, weights: np.ndarray, title: str = "", save_path: str = None):
-    """Single-sample attention bar chart."""
     fig, ax = plt.subplots(figsize=(max(6, len(tokens) * 0.5), 2.5))
     x = np.arange(len(tokens))
-    bars = ax.bar(x, weights, color=plt.cm.Reds(weights / weights.max()))
+    ax.bar(x, weights, color=plt.cm.Reds(weights / weights.max()))
     ax.set_xticks(x)
     ax.set_xticklabels(tokens, rotation=45, ha="right", fontsize=9)
     ax.set_ylabel("Attention weight")
