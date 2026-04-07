@@ -76,15 +76,17 @@ I am scared of what will happen next
 
 ## Project Structure
 src/
-─ preprocess.py   — text cleaning, vocabulary, train/val/test split, guidance templates
-─ dataset.py      — PyTorch Dataset and DataLoader
-─ model.py        — BiGRUBaseline and BiGRUAttention model definitions
-─ train.py        — training loop with early stopping
-─ evaluate.py     — test set evaluation, confusion matrix, model comparison
-─ predict.py      — single-text prediction logic
-─ demo.py         — interactive command-line demo
-─ utils.py        — shared utilities (metrics, plotting, checkpointing)
+preprocess.py   — text cleaning, vocabulary, train/val/test split, guidance templates
+dataset.py      — PyTorch Dataset and DataLoader
+model.py        — BiGRUBaseline and BiGRUAttention model definitions
+train.py        — training loop with early stopping
+evaluate.py     — test set evaluation, confusion matrix, model comparison
+predict.py      — single-text prediction logic
+demo.py         — interactive command-line demo
+utils.py        — shared utilities (metrics, plotting, checkpointing)
+
 data/
-─ emotions.csv    — Kaggle emotions dataset (not tracked in git)
+emotions.csv    — Kaggle emotions dataset (not tracked in git)
+
 outputs/            — model checkpoints, plots (not tracked in git)
 
