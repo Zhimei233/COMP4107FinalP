@@ -2,11 +2,6 @@
 train.py
 Trains either the baseline or attention BiGRU model.
 Best checkpoint saved to outputs/best_{model}.pt
-
-Usage
------
-python src/train.py --model baseline
-python src/train.py --model attention --epochs 50 --hidden 256 --lr 5e-4
 """
 
 import argparse

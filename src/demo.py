@@ -2,9 +2,6 @@
 demo.py
 Interactive demo for emotion classification.
 
-Usage:
-    python src/demo.py --model baseline
-    python src/demo.py --model attention
 """
 
 import argparse
@@ -19,6 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from predict import load_predictor, predict_one
 from utils import plot_attention_heatmap
 
+# Terminal colours for nicer output
 RESET = "\033[0m"; BOLD = "\033[1m"; RED = "\033[91m"
 YELLOW = "\033[93m"; CYAN = "\033[96m"; GREEN = "\033[92m"; DIM = "\033[2m"
 
@@ -37,7 +35,7 @@ def _colour_word(word, weight):
     if weight > 0.03: return f"{CYAN}{word}{RESET}"
     return f"{DIM}{word}{RESET}"
 
-
+# Display the prediction result in a nice format
 def display_result(result: dict, save_attn: bool = False, outputs_dir: str = "outputs"):
     top_emotion = result["predicted_emotion"]
     top_conf    = result["confidence"]
@@ -108,7 +106,7 @@ def run_demo(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model",       type=str,  default="attention", choices=["baseline", "attention"])
-    parser.add_argument("--max_len",     type=int,  default=64)   # 与训练一致 (问题1)
+    parser.add_argument("--max_len",     type=int,  default=64)
     parser.add_argument("--outputs_dir", type=str,  default="outputs")
     parser.add_argument("--save_attn",   action="store_true")
     args = parser.parse_args()

@@ -13,7 +13,7 @@ import seaborn as sns
 from sklearn.metrics import f1_score, classification_report, confusion_matrix
 
 
-# ── Reproducibility ───────────────────────────────────────────────────────────
+# Reproducibility
 def set_seed(seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)
@@ -24,7 +24,7 @@ def set_seed(seed: int = 42):
     torch.backends.cudnn.benchmark = False
 
 
-# ── Save / Load ───────────────────────────────────────────────────────────────
+# Save / Load 
 def save_checkpoint(model, args: dict, val_f1: float, val_acc: float, epoch: int, path: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     torch.save({
@@ -43,7 +43,7 @@ def load_checkpoint(path: str, model, device):
     return model, ckpt
 
 
-# ── Metrics ───────────────────────────────────────────────────────────────────
+# Metrics
 def compute_metrics(labels: np.ndarray, preds: np.ndarray, label_names: list) -> dict:
     acc = float(np.mean(labels == preds))
     macro_f1 = float(f1_score(labels, preds, average="macro"))
@@ -65,7 +65,7 @@ def print_metrics(metrics: dict, model_name: str = ""):
         print(f"    {name:<12}  {f1:.4f}")
 
 
-# ── Plots ─────────────────────────────────────────────────────────────────────
+# Plots
 def plot_confusion_matrix(labels, preds, label_names: list, title: str, save_path: str = None):
     cm = confusion_matrix(labels, preds)
     cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)

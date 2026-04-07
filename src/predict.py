@@ -2,9 +2,6 @@
 predict.py
 Single-text and batch prediction for trained emotion classifiers.
 
-Usage:
-    python src/predict.py --model attention --text "I feel so lonely and ignored"
-    python src/predict.py --model baseline --text "I am really happy today"
 """
 
 import argparse
@@ -48,7 +45,8 @@ def load_predictor(model_name: str, device, outputs_dir: str = "outputs"):
     model.eval()
     return model, vocab, saved_args
 
-
+# Predict a single text input, returning a dict of results 
+# or None if input is empty after cleaning
 def predict_one(text: str, model, vocab: Vocabulary, max_len: int, device) -> dict | None:
     clean = clean_text(text)
     tokens = clean.split()
@@ -75,7 +73,7 @@ def predict_one(text: str, model, vocab: Vocabulary, max_len: int, device) -> di
     top_emotion = top3[0][0]
     top_conf = top3[0][1]
 
-    # ── Keywords: filter stopwords + threshold near-zero weights ─────────────
+    # Keywords: filter stopwords
     keywords = []
     if attn is not None:
         filtered = [
@@ -91,7 +89,6 @@ def predict_one(text: str, model, vocab: Vocabulary, max_len: int, device) -> di
             ]
         keywords = sorted(filtered, key=lambda x: x["score"], reverse=True)[:3]
 
-    # ── Guidance: relationship-aware, confidence-tiered, MD5-stable ───────────
     guidance_info = get_guidance(top_emotion, top_conf, clean, top3)
 
     return {

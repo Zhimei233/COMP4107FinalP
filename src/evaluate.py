@@ -1,11 +1,6 @@
 """
 evaluate.py
 Load a saved checkpoint, evaluate on test set, plot confusion matrix.
-
-Usage
------
-python src/evaluate.py --model attention
-python src/evaluate.py --compare
 """
 
 import argparse
@@ -23,7 +18,7 @@ from preprocess import load_and_preprocess, LABEL2EMOTION, NUM_CLASSES
 from utils import (load_checkpoint, compute_metrics, print_metrics,
                    plot_confusion_matrix, plot_training_curves)
 
-
+# Get predictions and true labels from the dataloader
 def get_predictions(model, loader, device):
     model.eval()
     all_preds, all_labels = [], []
@@ -35,7 +30,7 @@ def get_predictions(model, loader, device):
             all_labels.extend(y.numpy())
     return np.array(all_labels), np.array(all_preds)
 
-
+# Main evaluation function: load model, get predictions, compute metrics, plot confusion matrix
 def run_eval(model_name, data_path, max_len, batch, outputs_dir):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt_path = os.path.join(outputs_dir, f"best_{model_name}.pt")
@@ -44,7 +39,7 @@ def run_eval(model_name, data_path, max_len, batch, outputs_dir):
     splits, vocab = load_and_preprocess(data_path=data_path, max_len=max_len)
     loaders = build_dataloaders(splits, batch_size=batch)
 
-    # weights_only=False for legacy checkpoint compatibility (问题4)
+    # weights_only=False for legacy checkpoint compatibility
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     saved_args = ckpt["args"]
     model = build_model(

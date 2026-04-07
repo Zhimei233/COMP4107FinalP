@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# ── 1. Baseline: BiGRU + Masked Mean/Max Pooling ─────────────────────────────
+# Baseline: BiGRU + Masked Mean/Max Pooling 
 class BiGRUBaseline(nn.Module):
     def __init__(
         self,
@@ -45,6 +45,7 @@ class BiGRUBaseline(nn.Module):
             nn.Linear(hidden_size, num_classes),
         )
 
+    # Forward pass with masked mean and max pooling
     def forward(self, x):
         """
         x : (batch, seq_len)
@@ -55,13 +56,13 @@ class BiGRUBaseline(nn.Module):
         emb = self.dropout(self.embedding(x))        # (B, L, E)
         out, _ = self.bigru(emb)                     # (B, L, 2H)
 
-        # ── Masked mean pooling: exclude PAD positions ──
+        # Masked mean pooling
         mask_expanded = (~pad_mask).unsqueeze(-1).float()   # (B, L, 1)
         sum_out = (out * mask_expanded).sum(dim=1)           # (B, 2H)
         lengths = mask_expanded.sum(dim=1).clamp(min=1)      # (B, 1)
         mean_pool = sum_out / lengths                        # (B, 2H)
 
-        # ── Masked max pooling: set PAD positions to -inf ──
+        # Masked max pooling
         out_masked = out.masked_fill(pad_mask.unsqueeze(-1), float("-inf"))
         max_pool, _ = out_masked.max(dim=1)                  # (B, 2H)
 
@@ -70,7 +71,7 @@ class BiGRUBaseline(nn.Module):
         return logits
 
 
-# ── 2. Proposed: BiGRU + Additive (Bahdanau-style) Attention ─────────────────
+# Proposed: BiGRU + Additive
 class BiGRUAttention(nn.Module):
     def __init__(
         self,
@@ -132,7 +133,6 @@ class BiGRUAttention(nn.Module):
         return logits
 
 
-# ── Convenience factory ───────────────────────────────────────────────────────
 def build_model(model_type: str, vocab_size: int, **kwargs) -> nn.Module:
     if model_type == "baseline":
         return BiGRUBaseline(vocab_size=vocab_size, **kwargs)

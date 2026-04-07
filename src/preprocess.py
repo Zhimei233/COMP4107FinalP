@@ -14,7 +14,7 @@ import numpy as np
 from collections import Counter
 from sklearn.model_selection import train_test_split
 
-# ── Label mapping ─────────────────────────────────────────────────────────────
+# Label mapping
 LABEL2EMOTION = {
     0: "sadness",
     1: "joy",
@@ -26,7 +26,7 @@ LABEL2EMOTION = {
 EMOTION2LABEL = {v: k for k, v in LABEL2EMOTION.items()}
 NUM_CLASSES = len(LABEL2EMOTION)
 
-# ── Stop words for attention keyword display ──────────────────────────────────
+# Stop words for attention keyword display
 DISPLAY_STOPWORDS = {
     # pronouns
     "i", "you", "he", "she", "they", "we", "it", "me", "him", "her", "us",
@@ -53,13 +53,13 @@ DISPLAY_STOPWORDS = {
     "didnt", "doesnt", "isnt", "arent", "wasnt", "werent",
 }
 
-# ── Relationship-aware keyword sets for post-processing (建议5) ───────────────
+# Relationship-aware keyword sets for post-processing
 LOVE_KEYWORDS    = {"love", "appreciate", "cherish", "adore", "affection", "warmth",
                     "grateful", "thankful", "fond", "devoted", "tender", "mean", "lot"}
 SURPRISE_KEYWORDS = {"unexpected", "wow", "believe", "shocked", "unbelievable",
                      "suddenly", "amazed", "astonished", "cant", "coming", "realize"}
 
-# ── Judge-style guidance ──────────────────────────────────────────────────────
+# Judge-style guidance
 EMOTION2GUIDANCE = {
     "sadness": {
         "category": "Seek support",
@@ -152,7 +152,7 @@ LOW_CONFIDENCE_GUIDANCE = {
 
 
 def _stable_idx(key: str, n: int) -> int:
-    """Deterministic index using MD5 hash — stable across Python runs (建议2)."""
+    #Deterministic index using MD5 hash
     digest = hashlib.md5(key.encode("utf-8")).hexdigest()
     return int(digest, 16) % n
 
@@ -162,16 +162,16 @@ def get_guidance(emotion: str, confidence: float, clean: str, top3: list) -> dic
     Return guidance based on emotion, confidence, and relationship-aware post-processing.
 
     Steps:
-      1. confidence < 0.50  → generic mixed-signal response (建议3)
+      1. confidence < 0.50  → generic mixed-signal response
       2. relationship-aware correction: if top-1 is joy but text contains
-         love/surprise keywords and runner-up score is close → override (建议5)
-      3. emotion-specific, tier-based, MD5-stable selection (建议2)
+         love/surprise keywords and runner-up score is close → override
+      3. emotion-specific, tier-based, MD5-stable selection
     """
-    # ── Step 1: low confidence override ──────────────────────────────────────
+    # low confidence override
     if confidence < 0.50:
         return LOW_CONFIDENCE_GUIDANCE
 
-    # ── Step 2: relationship-aware correction ─────────────────────────────────
+    # relationship-aware correction
     tokens = set(clean.split())
     if emotion == "joy" and len(top3) >= 2:
         runner_up, runner_conf = top3[1]
@@ -181,7 +181,7 @@ def get_guidance(emotion: str, confidence: float, clean: str, top3: list) -> dic
         elif runner_up == "surprise" and gap < 0.30 and tokens & SURPRISE_KEYWORDS:
             emotion = "surprise"
 
-    # ── Step 3: tiered, stable selection ─────────────────────────────────────
+    # tiered, stable selection 
     if emotion not in EMOTION2GUIDANCE:
         return {"category": "General support", "text": "Take a moment to reflect and respond with care."}
 
@@ -194,7 +194,7 @@ def get_guidance(emotion: str, confidence: float, clean: str, top3: list) -> dic
     }
 
 
-# ── Text cleaning ─────────────────────────────────────────────────────────────
+# Text cleaning
 def clean_text(text: str) -> str:
     text = text.lower()
     text = re.sub(r"http\S+|www\S+", "", text)
@@ -204,7 +204,7 @@ def clean_text(text: str) -> str:
     return text
 
 
-# ── Vocabulary ────────────────────────────────────────────────────────────────
+# Vocabulary
 class Vocabulary:
     PAD_TOKEN = "<PAD>"
     UNK_TOKEN = "<UNK>"
@@ -244,14 +244,14 @@ class Vocabulary:
             return pickle.load(f)
 
 
-# ── Padding / truncation ──────────────────────────────────────────────────────
+# Padding
 def pad_sequence(seq, max_len: int, pad_idx: int = 0):
     if len(seq) >= max_len:
         return seq[:max_len]
     return seq + [pad_idx] * (max_len - len(seq))
 
 
-# ── Main preprocessing pipeline ───────────────────────────────────────────────
+# Main preprocessing pipeline
 def load_and_preprocess(
     data_path: str,
     max_len: int = 64,
